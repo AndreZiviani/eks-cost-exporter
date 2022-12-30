@@ -5,7 +5,7 @@ import (
 	"flag"
 	"net/http"
 
-	"github.com/AndreZiviani/ec2-price-exporter/exporter"
+	"github.com/AndreZiviani/eks-cost-exporter/exporter"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	log "github.com/sirupsen/logrus"

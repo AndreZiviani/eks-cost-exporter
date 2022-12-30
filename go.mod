@@ -1,4 +1,4 @@
-module github.com/AndreZiviani/ec2-price-exporter
+module github.com/AndreZiviani/eks-cost-exporter
 
 go 1.19
 
