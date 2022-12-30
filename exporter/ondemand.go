@@ -46,6 +46,8 @@ func (m *Metrics) getInstances(ctx context.Context) {
 			m.Instances[string(instance.InstanceType)] = &Instance{
 				Memory: aws.ToInt64(instance.MemoryInfo.SizeInMiB),
 				VCpu:   aws.ToInt32(instance.VCpuInfo.DefaultVCpus),
+				Type:   "ec2",
+				Kind:   string(instance.InstanceType),
 			}
 		}
 	}

@@ -20,6 +20,8 @@ type Metrics struct {
 }
 
 type Instance struct {
+	Kind       string
+	Type       string
 	VCpu       int32
 	Memory     int64
 	Cost       float64

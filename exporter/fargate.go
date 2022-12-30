@@ -19,7 +19,7 @@ func (m *Metrics) GetFargatePricing(ctx context.Context) {
 
 	pricingSvc := pricing.NewFromConfig(config)
 
-	m.Instances["fargate"] = &Instance{}
+	m.Instances["fargate"] = &Instance{Type: "fargate", Kind: "fargate"}
 
 	pag := pricing.NewGetProductsPaginator(
 		pricingSvc,

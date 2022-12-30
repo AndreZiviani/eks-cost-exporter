@@ -25,18 +25,24 @@ func (e *Exporter) scrape(scrapes chan<- scrapeResult) {
 			Value:     pod.Cost,
 			Pod:       pod.Name,
 			Namespace: pod.Namespace,
+			Kind:      pod.Node.Instance.Kind,
+			Type:      pod.Node.Instance.Type,
 		}
 		scrapes <- scrapeResult{
 			Name:      "pod_cpu",
 			Value:     pod.VCpuCost,
 			Pod:       pod.Name,
 			Namespace: pod.Namespace,
+			Kind:      pod.Node.Instance.Kind,
+			Type:      pod.Node.Instance.Type,
 		}
 		scrapes <- scrapeResult{
 			Name:      "pod_memory",
 			Value:     pod.MemoryCost,
 			Pod:       pod.Name,
 			Namespace: pod.Namespace,
+			Kind:      pod.Node.Instance.Kind,
+			Type:      pod.Node.Instance.Type,
 		}
 	}
 
@@ -53,13 +59,15 @@ func (e *Exporter) setPricingMetrics(scrapes <-chan scrapeResult) {
 			e.pricingMetrics[name] = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 				Namespace: Namespace,
 				Name:      name,
-			}, []string{"pod", "namespace"})
+			}, []string{"pod", "namespace", "kind", "type"})
 			e.metricsMtx.Unlock()
 		}
 		var labels prometheus.Labels
 		labels = map[string]string{
 			"pod":       scr.Pod,
 			"namespace": scr.Namespace,
+			"kind":      scr.Kind,
+			"type":      scr.Type,
 		}
 		e.pricingMetrics[name].With(labels).Set(float64(scr.Value))
 	}

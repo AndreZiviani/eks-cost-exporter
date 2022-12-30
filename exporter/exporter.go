@@ -29,6 +29,8 @@ type scrapeResult struct {
 
 	Pod       string
 	Namespace string
+	Kind      string
+	Type      string
 }
 
 // NewExporter returns a new exporter of AWS EC2 Price metrics.
@@ -68,19 +70,19 @@ func (e *Exporter) initGauges() {
 		Namespace: Namespace,
 		Name:      "pod_total",
 		Help:      "Cost of the pod.",
-	}, []string{"pod", "namespace"})
+	}, []string{"pod", "namespace", "kind", "type"})
 
 	e.pricingMetrics["pod_memory"] = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Namespace: Namespace,
 		Name:      "pod_memory",
 		Help:      "Cost of the pod memory usage.",
-	}, []string{"pod", "namespace"})
+	}, []string{"pod", "namespace", "kind", "type"})
 
 	e.pricingMetrics["pod_cpu"] = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Namespace: Namespace,
 		Name:      "pod_cpu",
 		Help:      "Cost of the pod cpu usage.",
-	}, []string{"pod", "namespace"})
+	}, []string{"pod", "namespace", "kind", "type"})
 }
 
 // Describe outputs metric descriptions.
