@@ -2,7 +2,6 @@ package exporter
 
 import (
 	"context"
-	"strings"
 
 	"k8s.io/client-go/kubernetes"
 	metricsv "k8s.io/metrics/pkg/client/clientset/versioned"
@@ -37,6 +36,7 @@ func (m *Metrics) init(ctx context.Context) {
 	m.awsconfig = cfg
 
 	m.GetInstances(ctx)
+	m.GetFargatePricing(ctx)
 
 }
 
@@ -44,10 +44,6 @@ func (m *Metrics) GetCost(ctx context.Context) {
 	m.GetUsage(ctx)
 
 	for _, pod := range m.Pods {
-		if strings.Contains(pod.Node.Name, "fargate") {
-			continue
-		}
-
 		// convert bytes to GB
 		pod.MemoryCost = float64(pod.Usage.Memory.Value()) / 1024 / 1024 / 1024 * pod.Node.Instance.MemoryCost
 
