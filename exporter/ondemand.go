@@ -14,9 +14,6 @@ import (
 )
 
 const (
-	TermOnDemand string = "JRTCKXETXF"
-	TermPerHour  string = "6YS6EN2CT7"
-
 	// AWS doesn’t share the relationship between CPU and memory for each instance type, therefore we get this info from GCP.
 	// Obviously, it could be some differences between the cpu/memory relationship between the cloud providers but using the GCP
 	// relationship could give us a fairly approximate global idea and allow us know the cost of our pods and namespaces.
@@ -29,40 +26,6 @@ const (
 	// https://engineering.empathy.co/cloud-finops-part-4-kubernetes-cost-report/
 	cpuMemRelation = 7.2
 )
-
-type Pricing struct {
-	Product     Product
-	ServiceCode string
-	Terms       Terms
-}
-
-type Terms struct {
-	OnDemand map[string]SKU
-	Reserved map[string]SKU
-}
-type Product struct {
-	ProductFamily string
-	Attributes    map[string]string
-	Sku           string
-}
-
-type SKU struct {
-	PriceDimensions map[string]Details
-	Sku             string
-	EffectiveDate   string
-	OfferTermCode   string
-	TermAttributes  string
-}
-
-type Details struct {
-	Unit         string
-	EndRange     string
-	Description  string
-	AppliesTo    []string
-	RateCode     string
-	BeginRange   string
-	PricePerUnit map[string]string
-}
 
 func (m *Metrics) GetInstances(ctx context.Context) {
 	m.getInstances(ctx)

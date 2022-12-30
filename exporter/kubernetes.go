@@ -16,7 +16,6 @@ func (m *Metrics) GetPods(ctx context.Context) {
 
 	for _, pod := range pods.Items {
 		//TODO: check if anything changed (timestamp?) instead of always overwriting
-		//TODO: fargate
 		m.Pods[pod.ObjectMeta.Name] = &Pod{
 			Name:      pod.ObjectMeta.Name,
 			Namespace: pod.ObjectMeta.Namespace,
@@ -38,12 +37,22 @@ func (m *Metrics) GetNodes(ctx context.Context) {
 
 	for _, node := range nodes.Items {
 		//TODO: check if anything changed (timestamp?) instead of always overwriting
-		//TODO: fargate
-		m.Nodes[node.ObjectMeta.Name] = &Node{
-			Name:     node.ObjectMeta.Name,
-			AZ:       node.ObjectMeta.Labels["topology.kubernetes.io/zone"],
-			Region:   node.ObjectMeta.Labels["topology.kubernetes.io/region"],
-			Instance: m.Instances[node.ObjectMeta.Labels["node.kubernetes.io/instance-type"]],
+		if _, ok := node.Labels["eks.amazonaws.com/compute-type"]; ok {
+			if node.Labels["eks.amazonaws.com/compute-type"] == "fargate" {
+				m.Nodes[node.ObjectMeta.Name] = &Node{
+					Name:     node.ObjectMeta.Name,
+					AZ:       node.ObjectMeta.Labels["topology.kubernetes.io/zone"],
+					Region:   node.ObjectMeta.Labels["topology.kubernetes.io/region"],
+					Instance: m.Instances["fargate"],
+				}
+			}
+		} else if _, ok := node.ObjectMeta.Labels["node.kubernetes.io/instance-type"]; ok {
+			m.Nodes[node.ObjectMeta.Name] = &Node{
+				Name:     node.ObjectMeta.Name,
+				AZ:       node.ObjectMeta.Labels["topology.kubernetes.io/zone"],
+				Region:   node.ObjectMeta.Labels["topology.kubernetes.io/region"],
+				Instance: m.Instances[node.ObjectMeta.Labels["node.kubernetes.io/instance-type"]],
+			}
 		}
 	}
 }
