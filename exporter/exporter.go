@@ -83,6 +83,18 @@ func (e *Exporter) initGauges() {
 		Name:      "pod_cpu",
 		Help:      "Cost of the pod cpu usage.",
 	}, []string{"pod", "namespace", "kind", "type"})
+
+	e.pricingMetrics["pod_memory_requests"] = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Namespace: Namespace,
+		Name:      "pod_memory_requests",
+		Help:      "Cost of the pod memory requests.",
+	}, []string{"pod", "namespace", "kind", "type"})
+
+	e.pricingMetrics["pod_cpu_requests"] = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Namespace: Namespace,
+		Name:      "pod_cpu_requests",
+		Help:      "Cost of the pod cpu requests.",
+	}, []string{"pod", "namespace", "kind", "type"})
 }
 
 // Describe outputs metric descriptions.

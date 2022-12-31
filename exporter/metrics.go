@@ -41,17 +41,3 @@ func (m *Metrics) init(ctx context.Context) {
 	m.GetNodes(ctx)
 	m.GetPods(ctx)
 }
-
-func (m *Metrics) GetCost(ctx context.Context) {
-	m.GetUsage(ctx)
-
-	for _, pod := range m.Pods {
-		// convert bytes to GB
-		pod.MemoryCost = float64(pod.Usage.Memory.Value()) / 1024 / 1024 / 1024 * pod.Node.Instance.MemoryCost
-
-		//convert millicore to core
-		pod.VCpuCost = float64(pod.Usage.Cpu.MilliValue()) / 1000 * pod.Node.Instance.VCpuCost
-
-		pod.Cost = pod.MemoryCost + pod.VCpuCost
-	}
-}
