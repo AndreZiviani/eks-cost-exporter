@@ -72,7 +72,9 @@ func (m *Metrics) podUpdated(oldObj, newObj interface{}) {
 	}
 
 	if len(newPod.Spec.NodeName) > 0 {
-		m.Pods[newPod.ObjectMeta.Namespace+"/"+newPod.ObjectMeta.Name].Node = m.Nodes[newPod.Spec.NodeName]
+		pod := m.Pods[newPod.ObjectMeta.Namespace+"/"+newPod.ObjectMeta.Name]
+		pod.Node = m.Nodes[newPod.Spec.NodeName]
+		m.updatePodCost(pod)
 		return
 	}
 }
@@ -96,8 +98,10 @@ func (m *Metrics) podCreated(obj interface{}) {
 			Memory: resource.NewQuantity(0, resource.BinarySI),
 		},
 	}
+
 	m.podsMtx.Lock()
 	m.Pods[pod.ObjectMeta.Namespace+"/"+pod.ObjectMeta.Name] = &tmp
+	m.updatePodCost(&tmp)
 	m.podsMtx.Unlock()
 }
 
@@ -199,7 +203,7 @@ func (m Metrics) mergeResources(containers []corev1.Container) *PodResources {
 	return &resources
 }
 
-func (m *Metrics) GetUsage(ctx context.Context) {
+func (m *Metrics) GetUsageCost(ctx context.Context) {
 	podMetricsList, err := m.metrics.MetricsV1beta1().PodMetricses("").List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
 		panic(err.Error())
@@ -209,12 +213,35 @@ func (m *Metrics) GetUsage(ctx context.Context) {
 		name := pod.GetName()
 		namespace := pod.GetNamespace()
 
-		m.Pods[namespace+"/"+name].Usage.Cpu.Reset()
-		m.Pods[namespace+"/"+name].Usage.Memory.Reset()
+		me := m.Pods[namespace+"/"+name]
+		me.Usage.Cpu.Reset()
+		me.Usage.Memory.Reset()
 
 		for _, container := range pod.Containers {
-			m.Pods[namespace+"/"+name].Usage.Cpu.Add(container.Usage["cpu"])
-			m.Pods[namespace+"/"+name].Usage.Memory.Add(container.Usage["memory"])
+			me.Usage.Cpu.Add(container.Usage["cpu"])
+			me.Usage.Memory.Add(container.Usage["memory"])
 		}
+
+		m.updatePodCost(me)
 	}
+}
+
+func (m *Metrics) updatePodCost(pod *Pod) {
+	if pod.Node == nil {
+		pod.MemoryCost = float64(0)
+		pod.VCpuCost = float64(0)
+		pod.MemoryRequestsCost = float64(0)
+		pod.VCpuRequestsCost = float64(0)
+
+		return
+	}
+	// convert bytes to GB
+	pod.MemoryCost = float64(pod.Usage.Memory.Value()) / 1024 / 1024 / 1024 * pod.Node.Instance.MemoryCost
+	pod.MemoryRequestsCost = float64(pod.Resources.Memory.Value()) / 1024 / 1024 / 1024 * pod.Node.Instance.MemoryCost
+
+	//convert millicore to core
+	pod.VCpuCost = float64(pod.Usage.Cpu.MilliValue()) / 1000 * pod.Node.Instance.VCpuCost
+	pod.VCpuRequestsCost = float64(pod.Resources.Cpu.MilliValue()) / 1000 * pod.Node.Instance.VCpuCost
+
+	pod.Cost = pod.MemoryCost + pod.VCpuCost
 }

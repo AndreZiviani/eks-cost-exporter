@@ -17,7 +17,7 @@ func (e *Exporter) scrape(scrapes chan<- scrapeResult) {
 
 	var errorCount uint64
 
-	e.metrics.GetCost(context.TODO())
+	e.metrics.GetUsageCost(context.TODO())
 
 	for _, pod := range e.metrics.Pods {
 		scrapes <- scrapeResult{
@@ -39,6 +39,22 @@ func (e *Exporter) scrape(scrapes chan<- scrapeResult) {
 		scrapes <- scrapeResult{
 			Name:      "pod_memory",
 			Value:     pod.MemoryCost,
+			Pod:       pod.Name,
+			Namespace: pod.Namespace,
+			Kind:      pod.Node.Instance.Kind,
+			Type:      pod.Node.Instance.Type,
+		}
+		scrapes <- scrapeResult{
+			Name:      "pod_cpu_requests",
+			Value:     pod.VCpuRequestsCost,
+			Pod:       pod.Name,
+			Namespace: pod.Namespace,
+			Kind:      pod.Node.Instance.Kind,
+			Type:      pod.Node.Instance.Type,
+		}
+		scrapes <- scrapeResult{
+			Name:      "pod_memory_requests",
+			Value:     pod.MemoryRequestsCost,
 			Pod:       pod.Name,
 			Namespace: pod.Namespace,
 			Kind:      pod.Node.Instance.Kind,

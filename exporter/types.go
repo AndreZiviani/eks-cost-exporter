@@ -38,14 +38,16 @@ type Instance struct {
 }
 
 type Pod struct {
-	Name       string
-	Namespace  string
-	Resources  *PodResources
-	Node       *Node
-	Usage      *PodResources
-	Cost       float64
-	VCpuCost   float64
-	MemoryCost float64
+	Name               string
+	Namespace          string
+	Resources          *PodResources
+	Node               *Node
+	Usage              *PodResources
+	Cost               float64
+	VCpuCost           float64
+	MemoryCost         float64
+	VCpuRequestsCost   float64
+	MemoryRequestsCost float64
 }
 
 type Node struct {
