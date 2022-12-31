@@ -243,5 +243,12 @@ func (m *Metrics) updatePodCost(pod *Pod) {
 	pod.VCpuCost = float64(pod.Usage.Cpu.MilliValue()) / 1000 * pod.Node.Instance.VCpuCost
 	pod.VCpuRequestsCost = float64(pod.Resources.Cpu.MilliValue()) / 1000 * pod.Node.Instance.VCpuCost
 
-	pod.Cost = pod.MemoryCost + pod.VCpuCost
+	pod.Cost = max(pod.MemoryCost, pod.MemoryRequestsCost) + max(pod.VCpuCost, pod.VCpuRequestsCost)
+}
+
+func max(a, b float64) float64 {
+	if a > b {
+		return a
+	}
+	return b
 }
