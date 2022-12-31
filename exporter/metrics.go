@@ -38,6 +38,8 @@ func (m *Metrics) init(ctx context.Context) {
 	m.GetInstances(ctx)
 	m.GetFargatePricing(ctx)
 
+	m.GetNodes(ctx)
+	m.GetPods(ctx)
 }
 
 func (m *Metrics) GetCost(ctx context.Context) {
