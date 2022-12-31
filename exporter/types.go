@@ -1,6 +1,8 @@
 package exporter
 
 import (
+	"sync"
+
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/client-go/kubernetes"
@@ -13,10 +15,16 @@ type Metrics struct {
 	Pods      map[string]*Pod
 	Nodes     map[string]*Node
 
-	awsconfig  aws.Config
-	config     *rest.Config
-	kubernetes *kubernetes.Clientset
-	metrics    *metricsv.Clientset
+	awsconfig   aws.Config
+	config      *rest.Config
+	kubernetes  *kubernetes.Clientset
+	metrics     *metricsv.Clientset
+	podsMtx     sync.RWMutex
+	podsChan    chan struct{}
+	podsCached  bool
+	nodesMtx    sync.RWMutex
+	nodesChan   chan struct{}
+	nodesCached bool
 }
 
 type Instance struct {
