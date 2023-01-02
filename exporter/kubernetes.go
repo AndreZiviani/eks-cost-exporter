@@ -236,14 +236,14 @@ func (m *Metrics) updatePodCost(pod *Pod) {
 		return
 	}
 	// convert bytes to GB
-	pod.MemoryCost = float64(pod.Usage.Memory.Value()) / 1024 / 1024 / 1024 * pod.Node.Instance.MemoryCost
+	pod.MemoryCost += float64(pod.Usage.Memory.Value()) / 1024 / 1024 / 1024 * pod.Node.Instance.MemoryCost
 	pod.MemoryRequestsCost = float64(pod.Resources.Memory.Value()) / 1024 / 1024 / 1024 * pod.Node.Instance.MemoryCost
 
 	//convert millicore to core
-	pod.VCpuCost = float64(pod.Usage.Cpu.MilliValue()) / 1000 * pod.Node.Instance.VCpuCost
+	pod.VCpuCost += float64(pod.Usage.Cpu.MilliValue()) / 1000 * pod.Node.Instance.VCpuCost
 	pod.VCpuRequestsCost = float64(pod.Resources.Cpu.MilliValue()) / 1000 * pod.Node.Instance.VCpuCost
 
-	pod.Cost = max(pod.MemoryCost, pod.MemoryRequestsCost) + max(pod.VCpuCost, pod.VCpuRequestsCost)
+	pod.Cost += max(pod.MemoryCost, pod.MemoryRequestsCost) + max(pod.VCpuCost, pod.VCpuRequestsCost)
 }
 
 func max(a, b float64) float64 {
