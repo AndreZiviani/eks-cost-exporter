@@ -203,12 +203,13 @@ func (m Metrics) mergeResources(containers []corev1.Container) *PodResources {
 	return &resources
 }
 
-func (m *Metrics) GetUsageCost(ctx context.Context) {
+func (m *Metrics) GetUsageCost() {
 	podMetricsList, err := m.metrics.MetricsV1beta1().PodMetricses("").List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
 		panic(err.Error())
 	}
 
+	// caller is already holding the lock
 	for _, pod := range podMetricsList.Items {
 		name := pod.GetName()
 		namespace := pod.GetNamespace()
@@ -235,6 +236,9 @@ func (m *Metrics) updatePodCost(pod *Pod) {
 
 		return
 	}
+
+	//TODO: fargate should consider allocated resources instead of used
+
 	// convert bytes to GB
 	pod.MemoryCost = float64(pod.Usage.Memory.Value()) / 1024 / 1024 / 1024 * pod.Node.Instance.MemoryCost
 	pod.MemoryRequestsCost = float64(pod.Resources.Memory.Value()) / 1024 / 1024 / 1024 * pod.Node.Instance.MemoryCost
