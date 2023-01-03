@@ -2,6 +2,7 @@ package exporter
 
 import (
 	"sync"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/prometheus/client_golang/prometheus"
@@ -39,23 +40,33 @@ var (
 		"Cost of the pod cpu requests.",
 		podLabels, nil,
 	)
+	test = prometheus.NewDesc(
+		namespace+"_test123",
+		"test",
+		nil, nil,
+	)
 )
 
 type Metrics struct {
 	Instances map[string]*Instance
 	Pods      map[string]*Pod
 	Nodes     map[string]*Node
+	Metrics   map[string]*prometheus.CounterVec
 
 	awsconfig   aws.Config
 	config      *rest.Config
 	kubernetes  *kubernetes.Clientset
 	metrics     *metricsv.Clientset
+	registry    *prometheus.Registry
 	podsMtx     sync.RWMutex
 	podsChan    chan struct{}
 	podsCached  bool
 	nodesMtx    sync.RWMutex
 	nodesChan   chan struct{}
 	nodesCached bool
+
+	now  int64
+	last time.Time
 }
 
 type Instance struct {
@@ -73,12 +84,14 @@ type Pod struct {
 	Namespace          string
 	Resources          *PodResources
 	Node               *Node
-	Usage              *PodResources
+	Usage              *PodUsage
 	Cost               float64
 	VCpuCost           float64
 	MemoryCost         float64
 	VCpuRequestsCost   float64
 	MemoryRequestsCost float64
+	lastScrape         time.Time
+	now                time.Time
 }
 
 type Node struct {
@@ -91,4 +104,11 @@ type Node struct {
 type PodResources struct {
 	Cpu    *resource.Quantity
 	Memory *resource.Quantity
+}
+
+type PodUsage struct {
+	Cpu            *resource.Quantity
+	CpuPrevious    *resource.Quantity
+	Memory         *resource.Quantity
+	MemoryPrevious *resource.Quantity
 }

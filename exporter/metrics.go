@@ -10,18 +10,20 @@ import (
 )
 
 const (
-	Namespace = "eks_cost"
+	Namespace           = "eks_cost"
+	refreshAfterSeconds = 10
 )
 
-func NewMetrics(ctx context.Context) (*Metrics, error) {
-	m := Metrics{}
+func NewMetrics(ctx context.Context, registry *prometheus.Registry) (*Metrics, error) {
+	m := Metrics{registry: registry}
 	m.Instances = make(map[string]*Instance)
 	m.Pods = make(map[string]*Pod)
 	m.Nodes = make(map[string]*Node)
+	m.Metrics = make(map[string]*prometheus.CounterVec)
 
 	m.init(ctx)
 
-	prometheus.MustRegister(m)
+	prometheus.MustRegister(&m)
 
 	return &m, nil
 }
@@ -42,20 +44,60 @@ func (m *Metrics) init(ctx context.Context) {
 	}
 	m.awsconfig = cfg
 
+	//m.initializeMetrics()
+
 	m.GetInstances(ctx)
 	m.GetFargatePricing(ctx)
 
 	m.GetNodes(ctx)
 	m.GetPods(ctx)
+
+	m.GetUsageCost()
 }
 
-func (m Metrics) Describe(ch chan<- *prometheus.Desc) {
+func (m *Metrics) initializeMetrics() {
+	m.Metrics["pod_total"] = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: Namespace,
+		Name:      "pod_total",
+		Help:      "Total cost of the pod, if requests is bigger than current usage then considers the requests cost.",
+	}, podLabels)
+
+	m.Metrics["pod_memory"] = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: Namespace,
+		Name:      "pod_memory",
+		Help:      "Cost of the pod memory usage.",
+	}, podLabels)
+
+	m.Metrics["pod_cpu"] = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: Namespace,
+		Name:      "pod_cpu",
+		Help:      "Cost of the pod cpu usage.",
+	}, podLabels)
+
+	m.Metrics["pod_memory_requests"] = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: Namespace,
+		Name:      "pod_memory_requests",
+		Help:      "Cost of the pod memory requests.",
+	}, podLabels)
+
+	m.Metrics["pod_cpu_requests"] = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: Namespace,
+		Name:      "pod_cpu_requests",
+		Help:      "Cost of the pod cpu requests.",
+	}, podLabels)
+
+	for _, metric := range m.Metrics {
+		m.registry.MustRegister(metric)
+	}
+}
+
+func (m *Metrics) Describe(ch chan<- *prometheus.Desc) {
 	prometheus.DescribeByCollect(m, ch)
 }
 
-func (m Metrics) Collect(ch chan<- prometheus.Metric) {
-	m.GetUsageCost(context.TODO())
-
+func (m *Metrics) Collect(ch chan<- prometheus.Metric) {
+	m.GetUsageCost()
+	m.podsMtx.Lock()
 	for _, pod := range m.Pods {
 		ch <- prometheus.MustNewConstMetric(
 			podTotalDesc,
@@ -92,4 +134,10 @@ func (m Metrics) Collect(ch chan<- prometheus.Metric) {
 			pod.Name, pod.Namespace, pod.Node.Instance.Kind, pod.Node.Instance.Type,
 		)
 	}
+	ch <- prometheus.MustNewConstMetric(
+		test,
+		prometheus.GaugeValue,
+		float64(m.now),
+	)
+	m.podsMtx.Unlock()
 }

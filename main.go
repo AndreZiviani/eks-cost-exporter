@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/AndreZiviani/eks-cost-exporter/exporter"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	log "github.com/sirupsen/logrus"
 )
@@ -32,13 +33,15 @@ func main() {
 
 	ctx := context.TODO()
 
-	_, err := exporter.NewMetrics(ctx)
+	registry := prometheus.NewRegistry()
+	_, err := exporter.NewMetrics(ctx, registry)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	log.Infof("Starting metric http endpoint [address=%s, path=%s]", *addr, *metricsPath)
 	http.Handle(*metricsPath, promhttp.Handler())
+	//http.Handle(*metricsPath, promhttp.HandlerFor(registry, promhttp.HandlerOpts{}))
 	http.HandleFunc("/", rootHandler)
 	log.Fatal(http.ListenAndServe(*addr, nil))
 }
