@@ -1,9 +1,13 @@
 package exporter
 
 import (
+	"bytes"
 	"context"
+	"fmt"
 	"time"
 
+	promgo "github.com/prometheus/client_model/go"
+	"github.com/prometheus/common/expfmt"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -93,9 +97,11 @@ func (m *Metrics) podCreated(obj interface{}) {
 		Namespace: pod.ObjectMeta.Namespace,
 		Resources: m.mergeResources(pod.Spec.Containers),
 		Node:      m.Nodes[pod.Spec.NodeName],
-		Usage: &PodResources{
-			Cpu:    resource.NewQuantity(0, resource.DecimalSI),
-			Memory: resource.NewQuantity(0, resource.BinarySI),
+		Usage: &PodUsage{
+			Cpu:            resource.NewQuantity(0, resource.DecimalSI),
+			CpuPrevious:    resource.NewQuantity(0, resource.DecimalSI),
+			Memory:         resource.NewQuantity(0, resource.BinarySI),
+			MemoryPrevious: resource.NewQuantity(0, resource.BinarySI),
 		},
 	}
 
@@ -203,29 +209,6 @@ func (m Metrics) mergeResources(containers []corev1.Container) *PodResources {
 	return &resources
 }
 
-func (m *Metrics) GetUsageCost(ctx context.Context) {
-	podMetricsList, err := m.metrics.MetricsV1beta1().PodMetricses("").List(context.TODO(), metav1.ListOptions{})
-	if err != nil {
-		panic(err.Error())
-	}
-
-	for _, pod := range podMetricsList.Items {
-		name := pod.GetName()
-		namespace := pod.GetNamespace()
-
-		me := m.Pods[namespace+"/"+name]
-		me.Usage.Cpu.Reset()
-		me.Usage.Memory.Reset()
-
-		for _, container := range pod.Containers {
-			me.Usage.Cpu.Add(container.Usage["cpu"])
-			me.Usage.Memory.Add(container.Usage["memory"])
-		}
-
-		m.updatePodCost(me)
-	}
-}
-
 func (m *Metrics) updatePodCost(pod *Pod) {
 	if pod.Node == nil {
 		pod.MemoryCost = float64(0)
@@ -235,15 +218,62 @@ func (m *Metrics) updatePodCost(pod *Pod) {
 
 		return
 	}
+
+	var total float64
+
+	if pod.Node.Instance.Type == "fargate" {
+		// TODO: get annotation with allocated resources
+		return
+	}
+
+	if pod.lastScrape.IsZero() {
+		pod.lastScrape = time.Now()
+		return
+	}
+
+	diff := float64(pod.now.Sub(pod.lastScrape).Milliseconds())
+	pod.lastScrape = pod.now
+
 	// convert bytes to GB
-	pod.MemoryCost = float64(pod.Usage.Memory.Value()) / 1024 / 1024 / 1024 * pod.Node.Instance.MemoryCost
-	pod.MemoryRequestsCost = float64(pod.Resources.Memory.Value()) / 1024 / 1024 / 1024 * pod.Node.Instance.MemoryCost
+	gb := float64(1) / 1024 / 1024 / 1024
 
-	//convert millicore to core
-	pod.VCpuCost = float64(pod.Usage.Cpu.MilliValue()) / 1000 * pod.Node.Instance.VCpuCost
-	pod.VCpuRequestsCost = float64(pod.Resources.Cpu.MilliValue()) / 1000 * pod.Node.Instance.VCpuCost
+	// get how many GBs of RAM was used since last scrape in milliseconds
+	usage := diff * (float64(pod.Usage.Memory.Value()) * gb)
+	usageCost := usage * pod.Node.Instance.MemoryCost / 1000 // to seconds
+	pod.MemoryCost += usageCost
+	total += usageCost
 
-	pod.Cost = max(pod.MemoryCost, pod.MemoryRequestsCost) + max(pod.VCpuCost, pod.VCpuRequestsCost)
+	requests := diff * (float64(pod.Resources.Memory.Value()) * gb)
+	requestsCost := requests * pod.Node.Instance.MemoryCost / 1000 // to seconds
+	pod.MemoryRequestsCost += requestsCost
+	total += requestsCost
+
+	// pod used more resources than requested
+	if pod.Usage.Memory.Cmp(*pod.Resources.Memory) == 1 {
+		pod.Cost += usageCost
+	} else {
+		pod.Cost += requestsCost
+	}
+
+	usage = float64((pod.Usage.Cpu.Value() - pod.Usage.CpuPrevious.Value()) / int64(pod.Node.Instance.VCpu))
+	usageCost = usage * pod.Node.Instance.VCpuCost / 1000 // to seconds
+	pod.VCpuCost += usageCost
+	total += usageCost
+
+	requests = diff * float64(pod.Resources.Cpu.Value())
+	requestsCost = requests * pod.Node.Instance.VCpuCost / 1000 // to seconds
+	pod.VCpuRequestsCost += requestsCost
+	total += requestsCost
+
+	// pod used more resources than requested
+	if usage > float64(pod.Resources.Cpu.Value()) {
+		pod.Cost += usageCost
+		total += usageCost
+	} else {
+		pod.Cost += requestsCost
+		total += requestsCost
+	}
+
 }
 
 func max(a, b float64) float64 {
@@ -251,4 +281,78 @@ func max(a, b float64) float64 {
 		return a
 	}
 	return b
+}
+
+func (m *Metrics) GetUsageCost() {
+	m.podsMtx.Lock()
+	m.nodesMtx.Lock()
+
+	now := time.Now()
+
+	for _, node := range m.Nodes {
+		podMetrics := m.kubernetes.CoreV1().RESTClient().Get().Resource("nodes").Name(node.Name).SubResource("proxy").Suffix("metrics/resource")
+		r, err := podMetrics.DoRaw(context.TODO())
+		if err != nil {
+			panic(err)
+		}
+
+		reader := bytes.NewReader(r)
+
+		var parser expfmt.TextParser
+		mf, err := parser.TextToMetricFamilies(reader)
+
+		for _, metric := range mf["pod_cpu_usage_seconds_total"].Metric {
+			pod, err := getPodName(metric)
+			if err != nil {
+				continue
+			}
+
+			me := m.Pods[pod]
+			if me.Usage.Cpu.IsZero() {
+				me.Usage.CpuPrevious.Set(int64(*metric.Counter.Value))
+			} else {
+				me.Usage.CpuPrevious.Set(me.Usage.Cpu.Value())
+			}
+			me.Usage.Cpu.Set(int64(*metric.Counter.Value))
+			me.now = now
+		}
+		for _, metric := range mf["pod_memory_working_set_bytes"].Metric {
+			pod, err := getPodName(metric)
+			if err != nil {
+				continue
+			}
+
+			me := m.Pods[pod]
+			if me.Usage.Memory.IsZero() {
+				me.Usage.Memory.Set(int64(*metric.Gauge.Value))
+			} else {
+				me.Usage.MemoryPrevious.Set(me.Usage.Memory.Value())
+			}
+			me.Usage.Memory.Set(int64(*metric.Gauge.Value))
+			me.now = now
+		}
+	}
+	m.nodesMtx.Unlock()
+	for _, pod := range m.Pods {
+		m.updatePodCost(pod)
+	}
+	m.podsMtx.Unlock()
+}
+
+func getPodName(m *promgo.Metric) (string, error) {
+	var name, namespace string
+	for _, lp := range m.Label {
+		if lp.GetName() == "pod" {
+			name = lp.GetValue()
+		}
+		if lp.GetName() == "namespace" {
+			namespace = lp.GetValue()
+		}
+	}
+
+	if len(name) > 0 && len(namespace) > 0 {
+		return namespace + "/" + name, nil
+	}
+
+	return "", fmt.Errorf("missing required labels")
 }

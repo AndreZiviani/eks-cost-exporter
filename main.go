@@ -33,14 +33,15 @@ func main() {
 
 	ctx := context.TODO()
 
-	exporter, err := exporter.NewExporter(ctx)
+	registry := prometheus.NewRegistry()
+	_, err := exporter.NewMetrics(ctx, registry)
 	if err != nil {
 		log.Fatal(err)
 	}
-	prometheus.MustRegister(exporter)
 
 	log.Infof("Starting metric http endpoint [address=%s, path=%s]", *addr, *metricsPath)
 	http.Handle(*metricsPath, promhttp.Handler())
+	//http.Handle(*metricsPath, promhttp.HandlerFor(registry, promhttp.HandlerOpts{}))
 	http.HandleFunc("/", rootHandler)
 	log.Fatal(http.ListenAndServe(*addr, nil))
 }
