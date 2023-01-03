@@ -96,4 +96,26 @@ func (m *Metrics) Collect(ch chan<- prometheus.Metric) {
 		)
 	}
 	m.podsMtx.Unlock()
+	for _, node := range m.Nodes {
+		ch <- prometheus.MustNewConstMetric(
+			nodeTotalDesc,
+			prometheus.GaugeValue,
+			node.Instance.Cost,
+			node.Name, node.Region, node.AZ, node.Instance.Type, node.Instance.Kind,
+		)
+
+		ch <- prometheus.MustNewConstMetric(
+			nodeVCpuDesc,
+			prometheus.GaugeValue,
+			node.Instance.VCpuCost,
+			node.Name, node.Region, node.AZ, node.Instance.Type, node.Instance.Kind,
+		)
+
+		ch <- prometheus.MustNewConstMetric(
+			nodeMemoryDesc,
+			prometheus.GaugeValue,
+			node.Instance.MemoryCost,
+			node.Name, node.Region, node.AZ, node.Instance.Type, node.Instance.Kind,
+		)
+	}
 }

@@ -12,7 +12,8 @@ import (
 )
 
 var (
-	namespace    = "eks_cost"
+	namespace = "eks_cost"
+
 	podLabels    = []string{"pod", "namespace", "kind", "type"}
 	podTotalDesc = prometheus.NewDesc(
 		namespace+"_pod_total",
@@ -38,6 +39,23 @@ var (
 		namespace+"_pod_cpu_requests",
 		"Cost of the pod cpu requests.",
 		podLabels, nil,
+	)
+
+	nodeLabels    = []string{"node", "region", "az", "kind", "type"}
+	nodeTotalDesc = prometheus.NewDesc(
+		namespace+"_node_total",
+		"Total cost of the node",
+		nodeLabels, nil,
+	)
+	nodeVCpuDesc = prometheus.NewDesc(
+		namespace+"_node_cpu",
+		"Cost of node CPU.",
+		nodeLabels, nil,
+	)
+	nodeMemoryDesc = prometheus.NewDesc(
+		namespace+"_node_memory",
+		"Cost of each node GB of memory",
+		nodeLabels, nil,
 	)
 )
 
