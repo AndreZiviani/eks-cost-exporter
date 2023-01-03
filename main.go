@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"net/http"
+	"strings"
 
 	"github.com/AndreZiviani/eks-cost-exporter/exporter"
 	"github.com/prometheus/client_golang/prometheus"
@@ -12,9 +13,11 @@ import (
 )
 
 var (
-	addr        = flag.String("listen-address", ":8080", "The address to listen on for HTTP requests.")
-	metricsPath = flag.String("metrics-path", "/metrics", "path to metrics endpoint")
-	rawLevel    = flag.String("log-level", "info", "log level")
+	addr          = flag.String("listen-address", ":8080", "The address to listen on for HTTP requests.")
+	metricsPath   = flag.String("metrics-path", "/metrics", "path to metrics endpoint")
+	rawLevel      = flag.String("log-level", "info", "log level")
+	addPodLabels  = flag.String("add-pod-labels", "", "Comma separated list of pod labels that should be added to the cost_pod metric")
+	addNodeLabels = flag.String("add-node-labels", "", "Comma separated list of node labels that should be added to the cost_node metric")
 )
 
 func init() {
@@ -34,7 +37,17 @@ func main() {
 	ctx := context.TODO()
 
 	registry := prometheus.NewRegistry()
-	_, err := exporter.NewMetrics(ctx, registry)
+
+	podLabels := []string{}
+	if len(*addPodLabels) > 0 {
+		podLabels = strings.Split(strings.ReplaceAll(*addPodLabels, " ", ""), ",")
+	}
+	nodeLabels := []string{}
+	if len(*addNodeLabels) > 0 {
+		nodeLabels = strings.Split(strings.ReplaceAll(*addNodeLabels, " ", ""), ",")
+	}
+
+	_, err := exporter.NewMetrics(ctx, registry, podLabels, nodeLabels)
 	if err != nil {
 		log.Fatal(err)
 	}

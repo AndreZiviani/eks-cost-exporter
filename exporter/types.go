@@ -11,54 +11,6 @@ import (
 	metricsv "k8s.io/metrics/pkg/client/clientset/versioned"
 )
 
-var (
-	namespace = "eks_cost"
-
-	podLabels    = []string{"pod", "namespace", "node", "kind", "type"}
-	podTotalDesc = prometheus.NewDesc(
-		namespace+"_pod_total",
-		"Total cost of the pod, if requests is bigger than current usage then considers the requests cost.",
-		podLabels, nil,
-	)
-	podMemoryDesc = prometheus.NewDesc(
-		namespace+"_pod_memory",
-		"Cost of the pod memory usage.",
-		podLabels, nil,
-	)
-	podCpuDesc = prometheus.NewDesc(
-		namespace+"_pod_cpu",
-		"Cost of the pod cpu usage.",
-		podLabels, nil,
-	)
-	podMemoryRequestsDesc = prometheus.NewDesc(
-		namespace+"_pod_memory_requests",
-		"Cost of the pod memory requests.",
-		podLabels, nil,
-	)
-	podCpuRequestsDesc = prometheus.NewDesc(
-		namespace+"_pod_cpu_requests",
-		"Cost of the pod cpu requests.",
-		podLabels, nil,
-	)
-
-	nodeLabels    = []string{"node", "region", "az", "kind", "type"}
-	nodeTotalDesc = prometheus.NewDesc(
-		namespace+"_node_total",
-		"Total cost of the node",
-		nodeLabels, nil,
-	)
-	nodeVCpuDesc = prometheus.NewDesc(
-		namespace+"_node_cpu",
-		"Cost of node CPU.",
-		nodeLabels, nil,
-	)
-	nodeMemoryDesc = prometheus.NewDesc(
-		namespace+"_node_memory",
-		"Cost of each node GB of memory",
-		nodeLabels, nil,
-	)
-)
-
 type Metrics struct {
 	Instances map[string]*Instance
 	Pods      map[string]*Pod
@@ -75,6 +27,9 @@ type Metrics struct {
 	nodesMtx    sync.RWMutex
 	nodesChan   chan struct{}
 	nodesCached bool
+
+	addPodLabels  []string
+	addNodeLabels []string
 }
 
 type Instance struct {
@@ -90,6 +45,7 @@ type Instance struct {
 type Pod struct {
 	Name               string
 	Namespace          string
+	Labels             map[string]string
 	Resources          *PodResources
 	Node               *Node
 	Usage              *PodResources
@@ -102,6 +58,7 @@ type Pod struct {
 
 type Node struct {
 	Name     string
+	Labels   map[string]string
 	AZ       string
 	Region   string
 	Instance *Instance
