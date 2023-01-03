@@ -3,7 +3,6 @@ package exporter
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"os"
 	"strconv"
 
@@ -123,8 +122,8 @@ func (m *Metrics) GetOnDemandPricing(ctx context.Context) {
 			var tmp Pricing
 			json.Unmarshal([]byte(price), &tmp)
 
-			skuOnDemand := fmt.Sprintf("%s.%s", tmp.Product.Sku, TermOnDemand)
-			skuOnDemandPerHour := fmt.Sprintf("%s.%s", skuOnDemand, TermPerHour)
+			skuOnDemand := tmp.Product.Sku + "." + TermOnDemand
+			skuOnDemandPerHour := skuOnDemand + "." + TermPerHour
 
 			value, _ := strconv.ParseFloat(tmp.Terms.OnDemand[skuOnDemand].PriceDimensions[skuOnDemandPerHour].PricePerUnit["USD"], 64)
 

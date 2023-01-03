@@ -4,16 +4,48 @@ import (
 	"sync"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/prometheus/client_golang/prometheus"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	metricsv "k8s.io/metrics/pkg/client/clientset/versioned"
 )
 
+var (
+	namespace    = "eks_cost"
+	podLabels    = []string{"pod", "namespace", "kind", "type"}
+	podTotalDesc = prometheus.NewDesc(
+		namespace+"_pod_total",
+		"Total cost of the pod, if requests is bigger than current usage then considers the requests cost.",
+		podLabels, nil,
+	)
+	podMemoryDesc = prometheus.NewDesc(
+		namespace+"_pod_memory",
+		"Cost of the pod memory usage.",
+		podLabels, nil,
+	)
+	podCpuDesc = prometheus.NewDesc(
+		namespace+"_pod_cpu",
+		"Cost of the pod cpu usage.",
+		podLabels, nil,
+	)
+	podMemoryRequestsDesc = prometheus.NewDesc(
+		namespace+"_pod_memory_requests",
+		"Cost of the pod memory requests.",
+		podLabels, nil,
+	)
+	podCpuRequestsDesc = prometheus.NewDesc(
+		namespace+"_pod_cpu_requests",
+		"Cost of the pod cpu requests.",
+		podLabels, nil,
+	)
+)
+
 type Metrics struct {
 	Instances map[string]*Instance
 	Pods      map[string]*Pod
 	Nodes     map[string]*Node
+	Metrics   map[string]*prometheus.CounterVec
 
 	awsconfig   aws.Config
 	config      *rest.Config
