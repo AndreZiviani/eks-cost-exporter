@@ -2,6 +2,8 @@ package exporter
 
 import (
 	"context"
+	"regexp"
+	"strconv"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -9,6 +11,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/client-go/tools/cache"
+)
+
+var (
+	fargateRe = regexp.MustCompile(`(?P<cpu>[0-9.]+?)vCPU (?P<memory>[0-9.]+?)GB`)
 )
 
 func (m *Metrics) GetPods(ctx context.Context) {
@@ -88,10 +94,27 @@ func (m *Metrics) podCreated(obj interface{}) {
 		return
 	}
 
+	resources := m.mergeResources(pod.Spec.Containers)
+	if m.Nodes[pod.Spec.NodeName] != nil {
+		if m.Nodes[pod.Spec.NodeName].Instance.Kind == "fargate" {
+			// fargate allocates more resources than requested and charges accordingly
+			// the allocation size is exposed as an annotation
+			// https://docs.aws.amazon.com/eks/latest/userguide/fargate-pod-configuration.html
+			annotation := pod.ObjectMeta.Annotations["CapacityProvisioned"]
+			r := fargateRe.FindStringSubmatch(annotation)
+			cpu, _ := strconv.ParseFloat(r[fargateRe.SubexpIndex("cpu")], 64)
+			cpu = cpu * 1000 // to millicore
+			memory, _ := strconv.ParseFloat(r[fargateRe.SubexpIndex("memory")], 64)
+			memory = memory * 1024 * 1024 * 1024 // to GB
+			resources.Cpu.SetMilli(int64(cpu))
+			resources.Memory.Set(int64(memory))
+		}
+	}
+
 	tmp := Pod{
 		Name:      pod.ObjectMeta.Name,
 		Namespace: pod.ObjectMeta.Namespace,
-		Resources: m.mergeResources(pod.Spec.Containers),
+		Resources: resources,
 		Node:      m.Nodes[pod.Spec.NodeName],
 		Usage: &PodResources{
 			Cpu:    resource.NewQuantity(0, resource.DecimalSI),
@@ -236,8 +259,6 @@ func (m *Metrics) updatePodCost(pod *Pod) {
 
 		return
 	}
-
-	//TODO: fargate should consider allocated resources instead of used
 
 	// convert bytes to GB
 	pod.MemoryCost = float64(pod.Usage.Memory.Value()) / 1024 / 1024 / 1024 * pod.Node.Instance.MemoryCost
