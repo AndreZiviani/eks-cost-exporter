@@ -14,7 +14,7 @@ import (
 var (
 	namespace = "eks_cost"
 
-	podLabels    = []string{"pod", "namespace", "kind", "type"}
+	podLabels    = []string{"pod", "namespace", "node", "kind", "type"}
 	podTotalDesc = prometheus.NewDesc(
 		namespace+"_pod_total",
 		"Total cost of the pod, if requests is bigger than current usage then considers the requests cost.",

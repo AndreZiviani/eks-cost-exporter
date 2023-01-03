@@ -64,35 +64,35 @@ func (m *Metrics) Collect(ch chan<- prometheus.Metric) {
 			podTotalDesc,
 			prometheus.GaugeValue,
 			pod.Cost,
-			pod.Name, pod.Namespace, pod.Node.Instance.Kind, pod.Node.Instance.Type,
+			pod.Name, pod.Namespace, pod.Node.Name, pod.Node.Instance.Kind, pod.Node.Instance.Type,
 		)
 
 		ch <- prometheus.MustNewConstMetric(
 			podCpuDesc,
 			prometheus.GaugeValue,
 			pod.VCpuCost,
-			pod.Name, pod.Namespace, pod.Node.Instance.Kind, pod.Node.Instance.Type,
+			pod.Name, pod.Namespace, pod.Node.Name, pod.Node.Instance.Kind, pod.Node.Instance.Type,
 		)
 
 		ch <- prometheus.MustNewConstMetric(
 			podMemoryDesc,
 			prometheus.GaugeValue,
 			pod.MemoryCost,
-			pod.Name, pod.Namespace, pod.Node.Instance.Kind, pod.Node.Instance.Type,
+			pod.Name, pod.Namespace, pod.Node.Name, pod.Node.Instance.Kind, pod.Node.Instance.Type,
 		)
 
 		ch <- prometheus.MustNewConstMetric(
 			podCpuRequestsDesc,
 			prometheus.GaugeValue,
 			pod.VCpuRequestsCost,
-			pod.Name, pod.Namespace, pod.Node.Instance.Kind, pod.Node.Instance.Type,
+			pod.Name, pod.Namespace, pod.Node.Name, pod.Node.Instance.Kind, pod.Node.Instance.Type,
 		)
 
 		ch <- prometheus.MustNewConstMetric(
 			podMemoryRequestsDesc,
 			prometheus.GaugeValue,
 			pod.MemoryRequestsCost,
-			pod.Name, pod.Namespace, pod.Node.Instance.Kind, pod.Node.Instance.Type,
+			pod.Name, pod.Namespace, pod.Node.Name, pod.Node.Instance.Kind, pod.Node.Instance.Type,
 		)
 	}
 	m.podsMtx.Unlock()
