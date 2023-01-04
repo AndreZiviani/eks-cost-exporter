@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"strconv"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
@@ -27,6 +28,9 @@ const (
 )
 
 func (m *Metrics) GetInstances(ctx context.Context) {
+	now := time.Now()
+	defer timeTrack(now, "Retrieving EC2 Instance Types")
+
 	m.getInstances(ctx)
 	m.GetOnDemandPricing(ctx)
 }

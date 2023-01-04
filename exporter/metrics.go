@@ -3,9 +3,11 @@ package exporter
 import (
 	"context"
 	"strings"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/collectors"
+	log "github.com/sirupsen/logrus"
 	"k8s.io/client-go/kubernetes"
 	metricsv "k8s.io/metrics/pkg/client/clientset/versioned"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -49,9 +51,11 @@ func (m *Metrics) init(ctx context.Context) {
 	m.awsconfig = cfg
 
 	m.GetInstances(ctx)
+
 	m.GetFargatePricing(ctx)
 
 	m.GetNodes(ctx)
+
 	m.GetPods(ctx)
 }
 
@@ -183,4 +187,9 @@ func (m *Metrics) Collect(ch chan<- prometheus.Metric) {
 
 func sanitizeLabel(label string) string {
 	return strings.Replace(strings.Replace(label, ".", "_", -1), "/", "_", -1)
+}
+
+func timeTrack(start time.Time, name string) {
+	elapsed := time.Since(start)
+	log.Infof("%s took %s", name, elapsed)
 }

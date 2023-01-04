@@ -7,6 +7,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/pricing"
@@ -14,6 +15,9 @@ import (
 )
 
 func (m *Metrics) GetFargatePricing(ctx context.Context) {
+	now := time.Now()
+	defer timeTrack(now, "Retrieving Fargate pricing")
+
 	config := m.awsconfig
 	config.Region = "us-east-1" // this service is only available in us-east-1
 
