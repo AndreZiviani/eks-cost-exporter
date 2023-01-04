@@ -114,6 +114,7 @@ func (m *Metrics) podCreated(obj interface{}) {
 	tmp := Pod{
 		Name:      pod.ObjectMeta.Name,
 		Namespace: pod.ObjectMeta.Namespace,
+		Labels:    m.exposedPodLabels(pod.ObjectMeta.Labels),
 		Resources: resources,
 		Node:      m.Nodes[pod.Spec.NodeName],
 		Usage: &PodResources{
@@ -181,23 +182,19 @@ func (m *Metrics) nodeCreated(obj interface{}) {
 		return
 	}
 
-	var tmp Node
+	tmp := Node{
+		Name:   node.ObjectMeta.Name,
+		Labels: m.exposedNodeLabels(node.ObjectMeta.Labels),
+		AZ:     node.ObjectMeta.Labels["topology.kubernetes.io/zone"],
+		Region: node.ObjectMeta.Labels["topology.kubernetes.io/region"],
+	}
+
 	if _, ok := node.Labels["eks.amazonaws.com/compute-type"]; ok {
 		if node.Labels["eks.amazonaws.com/compute-type"] == "fargate" {
-			tmp = Node{
-				Name:     node.ObjectMeta.Name,
-				AZ:       node.ObjectMeta.Labels["topology.kubernetes.io/zone"],
-				Region:   node.ObjectMeta.Labels["topology.kubernetes.io/region"],
-				Instance: m.Instances["fargate"],
-			}
+			tmp.Instance = m.Instances["fargate"]
 		}
 	} else if _, ok := node.ObjectMeta.Labels["node.kubernetes.io/instance-type"]; ok {
-		tmp = Node{
-			Name:     node.ObjectMeta.Name,
-			AZ:       node.ObjectMeta.Labels["topology.kubernetes.io/zone"],
-			Region:   node.ObjectMeta.Labels["topology.kubernetes.io/region"],
-			Instance: m.Instances[node.ObjectMeta.Labels["node.kubernetes.io/instance-type"]],
-		}
+		tmp.Instance = m.Instances[node.ObjectMeta.Labels["node.kubernetes.io/instance-type"]]
 	}
 
 	m.nodesMtx.Lock()
@@ -276,4 +273,34 @@ func max(a, b float64) float64 {
 		return a
 	}
 	return b
+}
+
+func (m Metrics) exposedPodLabels(podLabels map[string]string) map[string]string {
+	if len(m.addPodLabels) == 0 {
+		return map[string]string{}
+	}
+
+	d := make(map[string]string, 0)
+	for _, addLabel := range m.addPodLabels {
+		if l, ok := podLabels[addLabel]; ok {
+			d[addLabel] = l
+		}
+	}
+
+	return d
+}
+
+func (m Metrics) exposedNodeLabels(nodeLabels map[string]string) map[string]string {
+	if len(m.addNodeLabels) == 0 {
+		return map[string]string{}
+	}
+
+	d := make(map[string]string, 0)
+	for _, addLabel := range m.addNodeLabels {
+		if l, ok := nodeLabels[addLabel]; ok {
+			d[addLabel] = l
+		}
+	}
+
+	return d
 }

@@ -2,6 +2,7 @@ package exporter
 
 import (
 	"context"
+	"strings"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/collectors"
@@ -11,14 +12,16 @@ import (
 )
 
 const (
-	Namespace = "eks_cost"
+	namespace = "eks_cost"
 )
 
-func NewMetrics(ctx context.Context, registry *prometheus.Registry) (*Metrics, error) {
+func NewMetrics(ctx context.Context, registry *prometheus.Registry, addPodLabels []string, addNodeLabels []string) (*Metrics, error) {
 	m := Metrics{}
 	m.Instances = make(map[string]*Instance)
 	m.Pods = make(map[string]*Pod)
 	m.Nodes = make(map[string]*Node)
+	m.addPodLabels = addPodLabels
+	m.addNodeLabels = addNodeLabels
 
 	m.init(ctx)
 
@@ -59,63 +62,125 @@ func (m *Metrics) Describe(ch chan<- *prometheus.Desc) {
 func (m *Metrics) Collect(ch chan<- prometheus.Metric) {
 	m.podsMtx.Lock()
 	m.GetUsageCost()
+
+	podLabels := []string{"pod", "namespace", "node", "kind", "type"}
+	if len(m.addPodLabels) > 0 {
+		for _, v := range m.addPodLabels {
+			podLabels = append(podLabels, sanitizeLabel(v))
+		}
+	}
+
 	for _, pod := range m.Pods {
+		podLabelValues := []string{pod.Name, pod.Namespace, pod.Node.Name, pod.Node.Instance.Kind, pod.Node.Instance.Type}
+		for _, l := range m.addPodLabels {
+			podLabelValues = append(podLabelValues, pod.Labels[l])
+		}
+
 		ch <- prometheus.MustNewConstMetric(
-			podTotalDesc,
+			prometheus.NewDesc(
+				namespace+"_pod_total",
+				"Total cost of the pod, if requests is bigger than current usage then considers the requests cost.",
+				podLabels, nil,
+			),
 			prometheus.GaugeValue,
 			pod.Cost,
-			pod.Name, pod.Namespace, pod.Node.Name, pod.Node.Instance.Kind, pod.Node.Instance.Type,
+			podLabelValues...,
 		)
 
 		ch <- prometheus.MustNewConstMetric(
-			podCpuDesc,
+			prometheus.NewDesc(
+				namespace+"_pod_cpu",
+				"Cost of the pod cpu usage.",
+				podLabels, nil,
+			),
 			prometheus.GaugeValue,
 			pod.VCpuCost,
-			pod.Name, pod.Namespace, pod.Node.Name, pod.Node.Instance.Kind, pod.Node.Instance.Type,
+			podLabelValues...,
 		)
 
 		ch <- prometheus.MustNewConstMetric(
-			podMemoryDesc,
+			prometheus.NewDesc(
+				namespace+"_pod_memory",
+				"Cost of the pod memory usage.",
+				podLabels, nil,
+			),
 			prometheus.GaugeValue,
 			pod.MemoryCost,
-			pod.Name, pod.Namespace, pod.Node.Name, pod.Node.Instance.Kind, pod.Node.Instance.Type,
+			podLabelValues...,
 		)
 
 		ch <- prometheus.MustNewConstMetric(
-			podCpuRequestsDesc,
+			prometheus.NewDesc(
+				namespace+"_pod_cpu_requests",
+				"Cost of the pod cpu requests.",
+				podLabels, nil,
+			),
 			prometheus.GaugeValue,
 			pod.VCpuRequestsCost,
-			pod.Name, pod.Namespace, pod.Node.Name, pod.Node.Instance.Kind, pod.Node.Instance.Type,
+			podLabelValues...,
 		)
 
 		ch <- prometheus.MustNewConstMetric(
-			podMemoryRequestsDesc,
+			prometheus.NewDesc(
+				namespace+"_pod_memory_requests",
+				"Cost of the pod memory requests.",
+				podLabels, nil,
+			),
 			prometheus.GaugeValue,
 			pod.MemoryRequestsCost,
-			pod.Name, pod.Namespace, pod.Node.Name, pod.Node.Instance.Kind, pod.Node.Instance.Type,
+			podLabelValues...,
 		)
 	}
 	m.podsMtx.Unlock()
+
+	nodeLabels := []string{"node", "region", "az", "kind", "type"}
+	if len(m.addNodeLabels) > 0 {
+		for _, v := range m.addNodeLabels {
+			nodeLabels = append(nodeLabels, sanitizeLabel(v))
+		}
+	}
+
 	for _, node := range m.Nodes {
+		nodeLabelValues := []string{node.Name, node.Region, node.AZ, node.Instance.Type, node.Instance.Kind}
+		for _, l := range m.addNodeLabels {
+			nodeLabelValues = append(nodeLabelValues, node.Labels[l])
+		}
+
 		ch <- prometheus.MustNewConstMetric(
-			nodeTotalDesc,
+			prometheus.NewDesc(
+				namespace+"_node_total",
+				"Total cost of the node",
+				nodeLabels, nil,
+			),
 			prometheus.GaugeValue,
 			node.Instance.Cost,
-			node.Name, node.Region, node.AZ, node.Instance.Type, node.Instance.Kind,
+			nodeLabelValues...,
 		)
 
 		ch <- prometheus.MustNewConstMetric(
-			nodeVCpuDesc,
+			prometheus.NewDesc(
+				namespace+"_node_cpu",
+				"Cost of node CPU.",
+				nodeLabels, nil,
+			),
 			prometheus.GaugeValue,
 			node.Instance.VCpuCost,
-			node.Name, node.Region, node.AZ, node.Instance.Type, node.Instance.Kind,
+			nodeLabelValues...,
 		)
 
 		ch <- prometheus.MustNewConstMetric(
-			nodeMemoryDesc,
+			prometheus.NewDesc(
+				namespace+"_node_memory",
+				"Cost of each node GB of memory",
+				nodeLabels, nil,
+			),
 			prometheus.GaugeValue,
 			node.Instance.MemoryCost,
-			node.Name, node.Region, node.AZ, node.Instance.Type, node.Instance.Kind,
+			nodeLabelValues...,
 		)
 	}
+}
+
+func sanitizeLabel(label string) string {
+	return strings.Replace(strings.Replace(label, ".", "_", -1), "/", "_", -1)
 }
