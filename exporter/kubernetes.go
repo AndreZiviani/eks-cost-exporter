@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"time"
 
+	log "github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -18,6 +19,9 @@ var (
 )
 
 func (m *Metrics) GetPods(ctx context.Context) {
+	now := time.Now()
+	defer timeTrack(now, "Retrieving current pod list")
+
 	m.podsCached = false
 	watchlist := cache.NewListWatchFromClient(
 		m.kubernetes.CoreV1().RESTClient(),
@@ -57,6 +61,8 @@ func (m *Metrics) podRemoved(obj interface{}) {
 		return
 	}
 
+	log.Debugf("Pod removed: %s/%s", pod.ObjectMeta.Namespace, pod.ObjectMeta.Name)
+
 	if _, ok := m.Pods[pod.ObjectMeta.Namespace+"/"+pod.ObjectMeta.Name]; ok {
 		m.podsMtx.Lock()
 		delete(m.Pods, pod.ObjectMeta.Namespace+"/"+pod.ObjectMeta.Name)
@@ -77,6 +83,8 @@ func (m *Metrics) podUpdated(oldObj, newObj interface{}) {
 		return
 	}
 
+	log.Debugf("Pod updated: %s/%s", newPod.ObjectMeta.Namespace, newPod.ObjectMeta.Name)
+
 	if len(newPod.Spec.NodeName) > 0 {
 		pod := m.Pods[newPod.ObjectMeta.Namespace+"/"+newPod.ObjectMeta.Name]
 		pod.Node = m.Nodes[newPod.Spec.NodeName]
@@ -93,6 +101,8 @@ func (m *Metrics) podCreated(obj interface{}) {
 	if !ok {
 		return
 	}
+
+	log.Debugf("Pod created: %s/%s", pod.ObjectMeta.Namespace, pod.ObjectMeta.Name)
 
 	resources := m.mergeResources(pod.Spec.Containers)
 	if m.Nodes[pod.Spec.NodeName] != nil {
@@ -130,6 +140,9 @@ func (m *Metrics) podCreated(obj interface{}) {
 }
 
 func (m *Metrics) GetNodes(ctx context.Context) {
+	now := time.Now()
+	defer timeTrack(now, "Retrieving current node list")
+
 	m.nodesCached = false
 	watchlist := cache.NewListWatchFromClient(
 		m.kubernetes.CoreV1().RESTClient(),
@@ -167,6 +180,8 @@ func (m *Metrics) nodeRemoved(obj interface{}) {
 		return
 	}
 
+	log.Debugf("Node removed: %s", node.ObjectMeta.Name)
+
 	if _, ok := m.Nodes[node.ObjectMeta.Name]; ok {
 		m.nodesMtx.Lock()
 		delete(m.Nodes, node.ObjectMeta.Name)
@@ -181,6 +196,8 @@ func (m *Metrics) nodeCreated(obj interface{}) {
 	if !ok {
 		return
 	}
+
+	log.Debugf("Node created: %s", node.ObjectMeta.Name)
 
 	tmp := Node{
 		Name:   node.ObjectMeta.Name,
@@ -228,6 +245,8 @@ func (m *Metrics) GetUsageCost() {
 	if err != nil {
 		panic(err.Error())
 	}
+
+	log.Debugf("Refreshing pod usage and cost")
 
 	// caller is already holding the lock
 	for _, pod := range podMetricsList.Items {
