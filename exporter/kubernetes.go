@@ -83,12 +83,21 @@ func (m *Metrics) podUpdated(oldObj, newObj interface{}) {
 		return
 	}
 
+	if newPod.Status.Phase == "Pending" {
+		return
+	}
+
 	log.Debugf("Pod updated: %s/%s", newPod.ObjectMeta.Namespace, newPod.ObjectMeta.Name)
 
 	if len(newPod.Spec.NodeName) > 0 {
 		pod := m.Pods[newPod.ObjectMeta.Namespace+"/"+newPod.ObjectMeta.Name]
-		pod.Node = m.Nodes[newPod.Spec.NodeName]
-		m.updatePodCost(pod)
+		if pod == nil {
+			// pod changed from Pending to Running
+			m.podCreated(newObj)
+		} else {
+			pod.Node = m.Nodes[newPod.Spec.NodeName]
+			m.updatePodCost(pod)
+		}
 		return
 	}
 }
@@ -99,6 +108,10 @@ func (m *Metrics) podCreated(obj interface{}) {
 
 	pod, ok := obj.(*corev1.Pod)
 	if !ok {
+		return
+	}
+
+	if pod.Status.Phase == "Pending" {
 		return
 	}
 
