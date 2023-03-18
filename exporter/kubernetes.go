@@ -125,12 +125,19 @@ func (m *Metrics) podCreated(obj interface{}) {
 			// https://docs.aws.amazon.com/eks/latest/userguide/fargate-pod-configuration.html
 			annotation := pod.ObjectMeta.Annotations["CapacityProvisioned"]
 			r := fargateRe.FindStringSubmatch(annotation)
+
 			cpu, _ := strconv.ParseFloat(r[fargateRe.SubexpIndex("cpu")], 64)
-			cpu = cpu * 1000 // to millicore
 			memory, _ := strconv.ParseFloat(r[fargateRe.SubexpIndex("memory")], 64)
+
+			m.Nodes[pod.Spec.NodeName].Cost.VCpu = m.Instances["fargate"].OnDemandCost.VCpu * cpu
+			m.Nodes[pod.Spec.NodeName].Cost.Memory = m.Instances["fargate"].OnDemandCost.Memory * memory
+			m.Nodes[pod.Spec.NodeName].Cost.Total = m.Nodes[pod.Spec.NodeName].Cost.VCpu + m.Nodes[pod.Spec.NodeName].Cost.Memory
+
+			cpu = cpu * 1000                     // to millicore
 			memory = memory * 1024 * 1024 * 1024 // to GB
 			resources.Cpu.SetMilli(int64(cpu))
 			resources.Memory.Set(int64(memory))
+
 		}
 	}
 
@@ -232,7 +239,7 @@ func (m *Metrics) nodeCreated(obj interface{}) {
 	} else if _, ok := node.Labels["eks.amazonaws.com/compute-type"]; ok && node.Labels["eks.amazonaws.com/compute-type"] == "fargate" {
 		// Fargate
 		tmp.Instance = m.Instances["fargate"]
-		tmp.Cost = &Ec2Cost{Type: "fargate", VCpu: tmp.Instance.OnDemandCost.VCpu, Memory: tmp.Instance.OnDemandCost.VCpu}
+		tmp.Cost = &Ec2Cost{Type: "fargate", VCpu: tmp.Instance.OnDemandCost.VCpu, Memory: tmp.Instance.OnDemandCost.Memory}
 	}
 
 	m.nodesMtx.Lock()
@@ -284,13 +291,6 @@ func (m *Metrics) GetUsageCost() {
 		}
 
 		m.updatePodCost(me)
-
-		if me.Node.Instance.Type == "fargate" {
-			// Also update node cost
-			me.Node.Cost.VCpu = me.VCpuCost
-			me.Node.Cost.Memory = me.MemoryCost
-			me.Node.Cost.Total = me.Cost
-		}
 	}
 }
 
@@ -304,13 +304,20 @@ func (m *Metrics) updatePodCost(pod *Pod) {
 		return
 	}
 
+	nodeCost := pod.Node.Cost
+	if pod.Node.Cost.Type == "fargate" {
+		// since fargate have a fixed price per VCpu/Memory we need to consider that instead of node cost
+		// node cost is already scaled to the actual cost instead of base price
+		nodeCost = m.Instances["fargate"].OnDemandCost
+	}
+
 	// convert bytes to GB
-	pod.MemoryCost = float64(pod.Usage.Memory.Value()) / 1024 / 1024 / 1024 * pod.Node.Cost.Memory
-	pod.MemoryRequestsCost = float64(pod.Resources.Memory.Value()) / 1024 / 1024 / 1024 * pod.Node.Cost.Memory
+	pod.MemoryCost = float64(pod.Usage.Memory.Value()) / 1024 / 1024 / 1024 * nodeCost.Memory
+	pod.MemoryRequestsCost = float64(pod.Resources.Memory.Value()) / 1024 / 1024 / 1024 * nodeCost.Memory
 
 	//convert millicore to core
-	pod.VCpuCost = float64(pod.Usage.Cpu.MilliValue()) / 1000 * pod.Node.Cost.VCpu
-	pod.VCpuRequestsCost = float64(pod.Resources.Cpu.MilliValue()) / 1000 * pod.Node.Cost.VCpu
+	pod.VCpuCost = float64(pod.Usage.Cpu.MilliValue()) / 1000 * nodeCost.VCpu
+	pod.VCpuRequestsCost = float64(pod.Resources.Cpu.MilliValue()) / 1000 * nodeCost.VCpu
 
 	pod.Cost = max(pod.MemoryCost, pod.MemoryRequestsCost) + max(pod.VCpuCost, pod.VCpuRequestsCost)
 }
