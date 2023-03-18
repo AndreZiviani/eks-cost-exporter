@@ -219,12 +219,12 @@ func (m *Metrics) nodeCreated(obj interface{}) {
 		Region: node.ObjectMeta.Labels["topology.kubernetes.io/region"],
 	}
 
-	if _, ok := node.Labels["eks.amazonaws.com/compute-type"]; ok {
+	if _, ok := node.ObjectMeta.Labels["node.kubernetes.io/instance-type"]; ok {
+		tmp.Instance = m.Instances[node.ObjectMeta.Labels["node.kubernetes.io/instance-type"]]
+	} else if _, ok := node.Labels["eks.amazonaws.com/compute-type"]; ok {
 		if node.Labels["eks.amazonaws.com/compute-type"] == "fargate" {
 			tmp.Instance = m.Instances["fargate"]
 		}
-	} else if _, ok := node.ObjectMeta.Labels["node.kubernetes.io/instance-type"]; ok {
-		tmp.Instance = m.Instances[node.ObjectMeta.Labels["node.kubernetes.io/instance-type"]]
 	}
 
 	m.nodesMtx.Lock()
