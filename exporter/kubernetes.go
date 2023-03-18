@@ -232,7 +232,7 @@ func (m *Metrics) nodeCreated(obj interface{}) {
 	} else if _, ok := node.Labels["eks.amazonaws.com/compute-type"]; ok && node.Labels["eks.amazonaws.com/compute-type"] == "fargate" {
 		// Fargate
 		tmp.Instance = m.Instances["fargate"]
-		tmp.Cost = tmp.Instance.OnDemandCost
+		tmp.Cost = &Ec2Cost{Type: "fargate", VCpu: tmp.Instance.OnDemandCost.VCpu, Memory: tmp.Instance.OnDemandCost.VCpu}
 	}
 
 	m.nodesMtx.Lock()
@@ -284,6 +284,13 @@ func (m *Metrics) GetUsageCost() {
 		}
 
 		m.updatePodCost(me)
+
+		if me.Node.Instance.Type == "fargate" {
+			// Also update node cost
+			me.Node.Cost.VCpu = me.VCpuCost
+			me.Node.Cost.Memory = me.MemoryCost
+			me.Node.Cost.Total = me.Cost
+		}
 	}
 }
 
