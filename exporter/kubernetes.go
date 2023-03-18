@@ -119,7 +119,7 @@ func (m *Metrics) podCreated(obj interface{}) {
 
 	resources := m.mergeResources(pod.Spec.Containers)
 	if m.Nodes[pod.Spec.NodeName] != nil {
-		if m.Nodes[pod.Spec.NodeName].Instance.Kind == "fargate" {
+		if m.Nodes[pod.Spec.NodeName].Instance.Type == "fargate" {
 			// fargate allocates more resources than requested and charges accordingly
 			// the allocation size is exposed as an annotation
 			// https://docs.aws.amazon.com/eks/latest/userguide/fargate-pod-configuration.html
@@ -220,11 +220,19 @@ func (m *Metrics) nodeCreated(obj interface{}) {
 	}
 
 	if _, ok := node.ObjectMeta.Labels["node.kubernetes.io/instance-type"]; ok {
+		// EC2
 		tmp.Instance = m.Instances[node.ObjectMeta.Labels["node.kubernetes.io/instance-type"]]
-	} else if _, ok := node.Labels["eks.amazonaws.com/compute-type"]; ok {
-		if node.Labels["eks.amazonaws.com/compute-type"] == "fargate" {
-			tmp.Instance = m.Instances["fargate"]
+
+		if _, ok := node.ObjectMeta.Labels["karpenter.sh/capacity-type"]; ok && node.ObjectMeta.Labels["karpenter.sh/capacity-type"] == "spot" {
+			// Node managed by Karpenter and is Spot
+			tmp.Cost = tmp.Instance.SpotCost[tmp.AZ]
+		} else {
+			tmp.Cost = tmp.Instance.OnDemandCost
 		}
+	} else if _, ok := node.Labels["eks.amazonaws.com/compute-type"]; ok && node.Labels["eks.amazonaws.com/compute-type"] == "fargate" {
+		// Fargate
+		tmp.Instance = m.Instances["fargate"]
+		tmp.Cost = tmp.Instance.OnDemandCost
 	}
 
 	m.nodesMtx.Lock()
@@ -290,12 +298,12 @@ func (m *Metrics) updatePodCost(pod *Pod) {
 	}
 
 	// convert bytes to GB
-	pod.MemoryCost = float64(pod.Usage.Memory.Value()) / 1024 / 1024 / 1024 * pod.Node.Instance.MemoryCost
-	pod.MemoryRequestsCost = float64(pod.Resources.Memory.Value()) / 1024 / 1024 / 1024 * pod.Node.Instance.MemoryCost
+	pod.MemoryCost = float64(pod.Usage.Memory.Value()) / 1024 / 1024 / 1024 * pod.Node.Cost.Memory
+	pod.MemoryRequestsCost = float64(pod.Resources.Memory.Value()) / 1024 / 1024 / 1024 * pod.Node.Cost.Memory
 
 	//convert millicore to core
-	pod.VCpuCost = float64(pod.Usage.Cpu.MilliValue()) / 1000 * pod.Node.Instance.VCpuCost
-	pod.VCpuRequestsCost = float64(pod.Resources.Cpu.MilliValue()) / 1000 * pod.Node.Instance.VCpuCost
+	pod.VCpuCost = float64(pod.Usage.Cpu.MilliValue()) / 1000 * pod.Node.Cost.VCpu
+	pod.VCpuRequestsCost = float64(pod.Resources.Cpu.MilliValue()) / 1000 * pod.Node.Cost.VCpu
 
 	pod.Cost = max(pod.MemoryCost, pod.MemoryRequestsCost) + max(pod.VCpuCost, pod.VCpuRequestsCost)
 }

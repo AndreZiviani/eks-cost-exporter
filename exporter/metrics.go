@@ -67,7 +67,7 @@ func (m *Metrics) Collect(ch chan<- prometheus.Metric) {
 	m.podsMtx.Lock()
 	m.GetUsageCost()
 
-	podLabels := []string{"pod", "namespace", "node", "kind", "type"}
+	podLabels := []string{"pod", "namespace", "node", "type", "lifecycle"}
 	if len(m.addPodLabels) > 0 {
 		for _, v := range m.addPodLabels {
 			podLabels = append(podLabels, sanitizeLabel(v))
@@ -75,7 +75,7 @@ func (m *Metrics) Collect(ch chan<- prometheus.Metric) {
 	}
 
 	for _, pod := range m.Pods {
-		podLabelValues := []string{pod.Name, pod.Namespace, pod.Node.Name, pod.Node.Instance.Kind, pod.Node.Instance.Type}
+		podLabelValues := []string{pod.Name, pod.Namespace, pod.Node.Name, pod.Node.Instance.Type, pod.Node.Cost.Type}
 		for _, l := range m.addPodLabels {
 			podLabelValues = append(podLabelValues, pod.Labels[l])
 		}
@@ -137,7 +137,7 @@ func (m *Metrics) Collect(ch chan<- prometheus.Metric) {
 	}
 	m.podsMtx.Unlock()
 
-	nodeLabels := []string{"node", "region", "az", "kind", "type"}
+	nodeLabels := []string{"node", "region", "az", "type", "lifecycle"}
 	if len(m.addNodeLabels) > 0 {
 		for _, v := range m.addNodeLabels {
 			nodeLabels = append(nodeLabels, sanitizeLabel(v))
@@ -145,7 +145,7 @@ func (m *Metrics) Collect(ch chan<- prometheus.Metric) {
 	}
 
 	for _, node := range m.Nodes {
-		nodeLabelValues := []string{node.Name, node.Region, node.AZ, node.Instance.Type, node.Instance.Kind}
+		nodeLabelValues := []string{node.Name, node.Region, node.AZ, node.Instance.Type, node.Cost.Type}
 		for _, l := range m.addNodeLabels {
 			nodeLabelValues = append(nodeLabelValues, node.Labels[l])
 		}
@@ -157,7 +157,7 @@ func (m *Metrics) Collect(ch chan<- prometheus.Metric) {
 				nodeLabels, nil,
 			),
 			prometheus.GaugeValue,
-			node.Instance.Cost,
+			node.Cost.Total,
 			nodeLabelValues...,
 		)
 
@@ -168,7 +168,7 @@ func (m *Metrics) Collect(ch chan<- prometheus.Metric) {
 				nodeLabels, nil,
 			),
 			prometheus.GaugeValue,
-			node.Instance.VCpuCost,
+			node.Cost.VCpu,
 			nodeLabelValues...,
 		)
 
@@ -179,7 +179,7 @@ func (m *Metrics) Collect(ch chan<- prometheus.Metric) {
 				nodeLabels, nil,
 			),
 			prometheus.GaugeValue,
-			node.Instance.MemoryCost,
+			node.Cost.Memory,
 			nodeLabelValues...,
 		)
 	}

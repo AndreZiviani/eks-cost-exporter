@@ -32,14 +32,20 @@ type Metrics struct {
 	addNodeLabels []string
 }
 
+type Ec2Cost struct {
+	Type   string
+	Total  float64
+	VCpu   float64
+	Memory float64
+}
+
 type Instance struct {
-	Kind       string
-	Type       string
-	VCpu       int32
-	Memory     int64
-	Cost       float64
-	VCpuCost   float64
-	MemoryCost float64
+	//Kind string
+	Type         string
+	VCpu         int32
+	Memory       int64
+	OnDemandCost *Ec2Cost
+	SpotCost     map[string]*Ec2Cost
 }
 
 type Pod struct {
@@ -62,6 +68,7 @@ type Node struct {
 	AZ       string
 	Region   string
 	Instance *Instance
+	Cost     *Ec2Cost
 }
 
 type PodResources struct {

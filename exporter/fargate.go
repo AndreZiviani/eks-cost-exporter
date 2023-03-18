@@ -23,7 +23,7 @@ func (m *Metrics) GetFargatePricing(ctx context.Context) {
 
 	pricingSvc := pricing.NewFromConfig(config)
 
-	m.Instances["fargate"] = &Instance{Type: "fargate", Kind: "fargate"}
+	m.Instances["fargate"] = &Instance{Type: "fargate"}
 
 	pag := pricing.NewGetProductsPaginator(
 		pricingSvc,
@@ -62,10 +62,14 @@ func (m *Metrics) GetFargatePricing(ctx context.Context) {
 			value, _ := strconv.ParseFloat(tmp.Terms.OnDemand[skuOnDemand].PriceDimensions[skuOnDemandPerHour].PricePerUnit["USD"], 64)
 
 			description := tmp.Terms.OnDemand[skuOnDemand].PriceDimensions[skuOnDemandPerHour].Description
+
+			if m.Instances["fargate"].OnDemandCost == nil {
+				m.Instances["fargate"].OnDemandCost = &Ec2Cost{Type: "fargate"}
+			}
 			if strings.Contains(description, "AWS Fargate - vCPU - ") {
-				m.Instances["fargate"].VCpuCost = value
+				m.Instances["fargate"].OnDemandCost.VCpu = value
 			} else if strings.Contains(description, "AWS Fargate - Memory - ") {
-				m.Instances["fargate"].MemoryCost = value
+				m.Instances["fargate"].OnDemandCost.Memory = value
 			}
 		}
 	}

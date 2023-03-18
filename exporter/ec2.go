@@ -33,6 +33,7 @@ func (m *Metrics) GetInstances(ctx context.Context) {
 
 	m.getInstances(ctx)
 	m.GetOnDemandPricing(ctx)
+	m.GetSpotPricing(ctx)
 }
 
 func (m *Metrics) getInstances(ctx context.Context) {
@@ -47,10 +48,11 @@ func (m *Metrics) getInstances(ctx context.Context) {
 		}
 		for _, instance := range instances.InstanceTypes {
 			m.Instances[string(instance.InstanceType)] = &Instance{
-				Memory: aws.ToInt64(instance.MemoryInfo.SizeInMiB),
-				VCpu:   aws.ToInt32(instance.VCpuInfo.DefaultVCpus),
-				Kind:   "ec2",
-				Type:   string(instance.InstanceType),
+				Memory:       aws.ToInt64(instance.MemoryInfo.SizeInMiB),
+				VCpu:         aws.ToInt32(instance.VCpuInfo.DefaultVCpus),
+				Type:         string(instance.InstanceType),
+				OnDemandCost: &Ec2Cost{},
+				SpotCost:     make(map[string]*Ec2Cost, 0),
 			}
 		}
 	}
@@ -133,11 +135,40 @@ func (m *Metrics) GetOnDemandPricing(ctx context.Context) {
 
 			vcpu, memory := m.getNormalizedCost(value, tmp.Product.Attributes["instanceType"])
 
-			m.Instances[tmp.Product.Attributes["instanceType"]].Cost = value
-			m.Instances[tmp.Product.Attributes["instanceType"]].VCpuCost = vcpu
-			m.Instances[tmp.Product.Attributes["instanceType"]].MemoryCost = memory
+			m.Instances[tmp.Product.Attributes["instanceType"]].OnDemandCost.Type = "ondemand"
+			m.Instances[tmp.Product.Attributes["instanceType"]].OnDemandCost.Total = value
+			m.Instances[tmp.Product.Attributes["instanceType"]].OnDemandCost.VCpu = vcpu
+			m.Instances[tmp.Product.Attributes["instanceType"]].OnDemandCost.Memory = memory
 
 		}
 
+	}
+}
+
+func (m *Metrics) GetSpotPricing(ctx context.Context) {
+	config := m.awsconfig
+
+	ec2Svc := ec2.NewFromConfig(config)
+
+	pag := ec2.NewDescribeSpotPriceHistoryPaginator(
+		ec2Svc,
+		&ec2.DescribeSpotPriceHistoryInput{
+			StartTime:           aws.Time(time.Now()),
+			ProductDescriptions: []string{"Linux/UNIX"},
+		})
+
+	for pag.HasMorePages() {
+		history, err := pag.NextPage(ctx)
+		if err != nil {
+			panic(err.Error())
+		}
+
+		for _, price := range history.SpotPriceHistory {
+			value, _ := strconv.ParseFloat(*price.SpotPrice, 64)
+
+			vcpu, memory := m.getNormalizedCost(value, string(price.InstanceType))
+
+			m.Instances[string(price.InstanceType)].SpotCost[aws.ToString(price.AvailabilityZone)] = &Ec2Cost{Type: "spot", Total: value, VCpu: vcpu, Memory: memory}
+		}
 	}
 }
