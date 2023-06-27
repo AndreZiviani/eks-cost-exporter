@@ -3,6 +3,7 @@ package exporter
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"strconv"
 	"time"
@@ -70,7 +71,7 @@ func (m Metrics) getInstanceVCpu(instance string) string {
 	return strconv.Itoa(int(m.Instances[instance].VCpu))
 }
 
-func (m Metrics) getNormalizedCost(value float64, instance string) (float64, float64) {
+func (m Metrics) getNormalizedCost(value float64, instance string) (float64, float64, error) {
 	if _, ok := m.Instances[instance]; ok {
 		vcpu := m.Instances[instance].VCpu
 		memory := m.Instances[instance].Memory / 1024
@@ -78,10 +79,10 @@ func (m Metrics) getNormalizedCost(value float64, instance string) (float64, flo
 		memoryCost := value / (cpuMemRelation*float64(vcpu) + float64(memory))
 		vcpuCost := cpuMemRelation * memoryCost
 
-		return vcpuCost, memoryCost
+		return vcpuCost, memoryCost, nil
 	}
-	log.Panic("could not find instance type %s", instance)
-	return 0, 0
+	log.Debugf("could not find instance type %s, ignoring", instance)
+	return 0, 0, fmt.Errorf("could not find instance type %s", instance)
 }
 
 func (m *Metrics) GetOnDemandPricing(ctx context.Context) {
@@ -141,7 +142,11 @@ func (m *Metrics) GetOnDemandPricing(ctx context.Context) {
 
 			value, _ := strconv.ParseFloat(tmp.Terms.OnDemand[skuOnDemand].PriceDimensions[skuOnDemandPerHour].PricePerUnit["USD"], 64)
 
-			vcpu, memory := m.getNormalizedCost(value, tmp.Product.Attributes["instanceType"])
+			vcpu, memory, err := m.getNormalizedCost(value, tmp.Product.Attributes["instanceType"])
+			if err != nil {
+				// somehow we got the price of the instance but it is not returned by instance types api, legacy instance type?
+				continue
+			}
 
 			m.Instances[tmp.Product.Attributes["instanceType"]].OnDemandCost.Type = "ondemand"
 			m.Instances[tmp.Product.Attributes["instanceType"]].OnDemandCost.Total = value
@@ -174,7 +179,11 @@ func (m *Metrics) GetSpotPricing(ctx context.Context) {
 		for _, price := range history.SpotPriceHistory {
 			value, _ := strconv.ParseFloat(*price.SpotPrice, 64)
 
-			vcpu, memory := m.getNormalizedCost(value, string(price.InstanceType))
+			vcpu, memory, err := m.getNormalizedCost(value, string(price.InstanceType))
+			if err != nil {
+				// somehow we got the price of the instance but it is not returned by instance types api, legacy instance type?
+				continue
+			}
 
 			m.Instances[string(price.InstanceType)].SpotCost[aws.ToString(price.AvailabilityZone)] = &Ec2Cost{Type: "spot", Total: value, VCpu: vcpu, Memory: memory}
 		}
