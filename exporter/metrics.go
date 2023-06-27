@@ -2,6 +2,7 @@ package exporter
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 
@@ -75,7 +76,12 @@ func (m *Metrics) Collect(ch chan<- prometheus.Metric) {
 	}
 
 	for _, pod := range m.Pods {
-		podLabelValues := []string{pod.Name, pod.Namespace, pod.Node.Name, pod.Node.Instance.Type, pod.Node.Cost.Type}
+		podLabelValues, err := getPodLabels(pod)
+		if err != nil {
+			log.Errorf("%w", err)
+			continue
+		}
+
 		for _, l := range m.addPodLabels {
 			podLabelValues = append(podLabelValues, pod.Labels[l])
 		}
@@ -192,4 +198,15 @@ func sanitizeLabel(label string) string {
 func timeTrack(start time.Time, name string) {
 	elapsed := time.Since(start)
 	log.Infof("%s took %s", name, elapsed)
+}
+
+func getPodLabels(pod *Pod) ([]string, error) {
+	if pod.Node == nil {
+		return []string{}, fmt.Errorf("pod %s/%s does not have a node associated!", pod.Namespace, pod.Name)
+	}
+	if pod.Node.Instance == nil {
+		return []string{}, fmt.Errorf("node %s does not have an instance associated!", pod.Node.Name)
+	}
+
+	return []string{pod.Name, pod.Namespace, pod.Node.Name, pod.Node.Instance.Type, pod.Node.Cost.Type}, nil
 }
