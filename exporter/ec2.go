@@ -11,6 +11,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go-v2/service/pricing"
 	pricingtypes "github.com/aws/aws-sdk-go-v2/service/pricing/types"
+	log "github.com/sirupsen/logrus"
 )
 
 const (
@@ -41,6 +42,7 @@ func (m *Metrics) getInstances(ctx context.Context) {
 	pag := ec2.NewDescribeInstanceTypesPaginator(
 		ec2Svc,
 		&ec2.DescribeInstanceTypesInput{})
+	instanceCount := 0
 	for pag.HasMorePages() {
 		instances, err := pag.NextPage(ctx)
 		if err != nil {
@@ -55,7 +57,9 @@ func (m *Metrics) getInstances(ctx context.Context) {
 				SpotCost:     make(map[string]*Ec2Cost, 0),
 			}
 		}
+		instanceCount += len(instances.InstanceTypes)
 	}
+	log.Infof("Collected %d instance types", instanceCount)
 }
 
 func (m Metrics) getInstanceMemory(instance string) string {
@@ -67,13 +71,17 @@ func (m Metrics) getInstanceVCpu(instance string) string {
 }
 
 func (m Metrics) getNormalizedCost(value float64, instance string) (float64, float64) {
-	vcpu := m.Instances[instance].VCpu
-	memory := m.Instances[instance].Memory / 1024
+	if _, ok := m.Instances[instance]; ok {
+		vcpu := m.Instances[instance].VCpu
+		memory := m.Instances[instance].Memory / 1024
 
-	memoryCost := value / (cpuMemRelation*float64(vcpu) + float64(memory))
-	vcpuCost := cpuMemRelation * memoryCost
+		memoryCost := value / (cpuMemRelation*float64(vcpu) + float64(memory))
+		vcpuCost := cpuMemRelation * memoryCost
 
-	return vcpuCost, memoryCost
+		return vcpuCost, memoryCost
+	}
+	log.Panic("could not find instance type %s", instance)
+	return 0, 0
 }
 
 func (m *Metrics) GetOnDemandPricing(ctx context.Context) {

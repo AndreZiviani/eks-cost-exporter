@@ -240,6 +240,8 @@ func (m *Metrics) nodeCreated(obj interface{}) {
 		// Fargate
 		tmp.Instance = m.Instances["fargate"]
 		tmp.Cost = &Ec2Cost{Type: "fargate", VCpu: tmp.Instance.OnDemandCost.VCpu, Memory: tmp.Instance.OnDemandCost.Memory}
+	} else {
+		log.Warnf("could not identify node: %+v", node)
 	}
 
 	m.nodesMtx.Lock()
