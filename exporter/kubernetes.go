@@ -31,7 +31,7 @@ func (m *Metrics) GetPods(ctx context.Context) {
 	_, controller := cache.NewInformer(
 		watchlist,
 		&corev1.Pod{},
-		time.Second*0,
+		time.Minute*5,
 		cache.ResourceEventHandlerFuncs{
 			AddFunc:    m.podCreated,
 			DeleteFunc: m.podRemoved,
@@ -172,10 +172,11 @@ func (m *Metrics) GetNodes(ctx context.Context) {
 	_, controller := cache.NewInformer(
 		watchlist,
 		&corev1.Node{},
-		time.Second*0,
+		time.Minute*5,
 		cache.ResourceEventHandlerFuncs{
 			AddFunc:    m.nodeCreated,
 			DeleteFunc: m.nodeRemoved,
+			UpdateFunc: m.nodeUpdated,
 		},
 	)
 
@@ -207,6 +208,10 @@ func (m *Metrics) nodeRemoved(obj interface{}) {
 		delete(m.Nodes, node.ObjectMeta.Name)
 		m.nodesMtx.Unlock()
 	}
+}
+
+func (m *Metrics) nodeUpdated(oldObj, newObj interface{}) {
+	m.nodeCreated(newObj)
 }
 
 func (m *Metrics) nodeCreated(obj interface{}) {
