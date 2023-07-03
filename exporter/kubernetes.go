@@ -288,6 +288,11 @@ func (m *Metrics) GetUsageCost() {
 		name := pod.GetName()
 		namespace := pod.GetNamespace()
 
+		if _, ok := m.Pods[namespace+"/"+name]; !ok {
+			log.Debugf("could not find pod %s/%s when iterating through metrics, ignoring", namespace, name)
+			continue
+		}
+
 		me := m.Pods[namespace+"/"+name]
 		me.Usage.Cpu.Reset()
 		me.Usage.Memory.Reset()

@@ -66,6 +66,9 @@ func (m *Metrics) Describe(ch chan<- *prometheus.Desc) {
 
 func (m *Metrics) Collect(ch chan<- prometheus.Metric) {
 	m.podsMtx.Lock()
+	m.nodesMtx.Lock()
+	defer m.podsMtx.Unlock()
+	defer m.nodesMtx.Unlock()
 	m.GetUsageCost()
 
 	podLabels := []string{"pod", "namespace", "node", "type", "lifecycle"}
@@ -141,7 +144,6 @@ func (m *Metrics) Collect(ch chan<- prometheus.Metric) {
 			podLabelValues...,
 		)
 	}
-	m.podsMtx.Unlock()
 
 	nodeLabels := []string{"node", "region", "az", "type", "lifecycle"}
 	if len(m.addNodeLabels) > 0 {
